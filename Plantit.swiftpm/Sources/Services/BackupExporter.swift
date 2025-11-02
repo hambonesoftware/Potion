@@ -25,7 +25,11 @@ struct ExportedData {
         let id: UUID
         let plantID: UUID
         let kind: String
+        let cadenceKind: String
         let frequencyInDays: Int
+        let weekday: Int?
+        let dayOfMonth: Int?
+        let nextDueAt: Date?
         let lastCompletedAt: Date?
     }
 
@@ -177,7 +181,11 @@ enum BackupExporter {
                 id: schedule.id,
                 plantID: schedule.plant?.id ?? schedule.id,
                 kind: schedule.kind.rawValue,
+                cadenceKind: schedule.cadenceKind.rawValue,
                 frequencyInDays: schedule.frequencyInDays,
+                weekday: schedule.weekday,
+                dayOfMonth: schedule.dayOfMonth,
+                nextDueAt: schedule.nextDueAt,
                 lastCompletedAt: schedule.lastCompletedAt
             )
         }

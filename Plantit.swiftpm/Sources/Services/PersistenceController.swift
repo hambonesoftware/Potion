@@ -31,11 +31,18 @@ final class PersistenceController {
         guard villages.isEmpty else { return }
 
         let starterVillage = Village(name: "Demo Village", climate: .temperate)
-        let wateringSchedule = Schedule(kind: .watering, frequencyInDays: 7, lastCompletedAt: Date().addingTimeInterval(-86_400))
+        let lastWatered = Date().addingTimeInterval(-86_400)
+        let wateringSchedule = Schedule(
+            kind: .watering,
+            cadenceKind: .everyNDays,
+            frequencyInDays: 7,
+            lastCompletedAt: lastWatered
+        )
+        wateringSchedule.recomputeNextDue(referenceDate: lastWatered)
         let samplePlant = Plant(
             name: "Starter Aloe",
             species: "Aloe Vera",
-            lastWateredAt: Date().addingTimeInterval(-86_400),
+            lastWateredAt: lastWatered,
             notes: "Loves bright light.",
             village: starterVillage,
             activities: [

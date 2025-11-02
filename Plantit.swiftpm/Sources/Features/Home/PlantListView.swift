@@ -203,7 +203,11 @@ private struct PlantTileView: View {
 
     private var wateringScheduleDescription: String {
         guard let schedule = plant.schedules.first(where: { $0.kind == .watering }) else { return "" }
-        return "Every \(schedule.frequencyInDays) day\(schedule.frequencyInDays == 1 ? "" : "s")"
+        var parts: [String] = [schedule.cadenceDescription]
+        if let next = schedule.nextDueAt {
+            parts.append("Next due \(next.formatted(date: .abbreviated, time: .shortened))")
+        }
+        return parts.joined(separator: " • ")
     }
 
     var body: some View {

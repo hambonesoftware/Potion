@@ -42,6 +42,7 @@ final class PlantRepository {
 
         if let frequency = wateringFrequencyInDays {
             let schedule = Schedule(kind: .watering, frequencyInDays: frequency, plant: plant)
+            schedule.recomputeNextDue()
             plant.schedules.append(schedule)
         }
 
@@ -66,9 +67,12 @@ final class PlantRepository {
         var wateringSchedule = plant.schedules.first { $0.kind == .watering }
         if let frequency = wateringFrequencyInDays {
             if let schedule = wateringSchedule {
-                schedule.frequencyInDays = frequency
+                schedule.cadenceKind = .everyNDays
+                schedule.frequencyInDays = max(1, frequency)
+                schedule.recomputeNextDue()
             } else {
                 let schedule = Schedule(kind: .watering, frequencyInDays: frequency, plant: plant)
+                schedule.recomputeNextDue()
                 plant.schedules.append(schedule)
                 wateringSchedule = schedule
             }
@@ -98,12 +102,29 @@ final class PlantRepository {
             plant.lastWateredAt = activity.createdAt
             if let schedule = plant.schedules.first(where: { $0.kind == .watering }) {
                 schedule.lastCompletedAt = activity.createdAt
+                schedule.recomputeNextDue(referenceDate: activity.createdAt)
             }
         }
 
         context.insert(activity)
         try context.save()
         return activity
+    }
+
+    func complete(schedule: Schedule, at date: Date = .now) async throws {
+        if let plant = schedule.plant, let activityKind = schedule.kind.defaultActivityKind {
+            _ = try await recordActivity(for: plant, kind: activityKind)
+        } else {
+            schedule.lastCompletedAt = date
+            schedule.recomputeNextDue(referenceDate: date)
+            try context.save()
+        }
+    }
+
+    func snooze(schedule: Schedule, by interval: TimeInterval = 3600) throws {
+        let reference = max(Date(), schedule.nextDueAt ?? Date())
+        schedule.nextDueAt = reference.addingTimeInterval(interval)
+        try context.save()
     }
 
     @discardableResult

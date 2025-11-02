@@ -62,7 +62,11 @@ enum CSVExporter {
             "id",
             "plant_id",
             "kind",
+            "cadence_kind",
             "frequency_in_days",
+            "weekday",
+            "day_of_month",
+            "next_due_at",
             "last_completed_at"
         ]]
 
@@ -71,7 +75,11 @@ enum CSVExporter {
                 schedule.id.uuidString,
                 schedule.plantID.uuidString,
                 schedule.kind,
+                schedule.cadenceKind,
                 String(schedule.frequencyInDays),
+                schedule.weekday.map(String.init) ?? "",
+                schedule.dayOfMonth.map(String.init) ?? "",
+                schedule.nextDueAt.map { isoString(from: $0) } ?? "",
                 schedule.lastCompletedAt.map { isoString(from: $0) } ?? ""
             ])
         }

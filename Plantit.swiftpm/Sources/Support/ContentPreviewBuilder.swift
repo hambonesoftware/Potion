@@ -10,6 +10,7 @@ enum ContentPreviewBuilder {
         let context = ModelContext(container)
         let villages = (try? context.fetch(FetchDescriptor<Village>())) ?? []
         let plants = (try? context.fetch(FetchDescriptor<Plant>())) ?? []
+        let notificationService = NotificationService(modelContainer: container, loggingService: logging)
 
         let initialVillage = selectedPlant ? plants.first?.village ?? villages.first : villages.first
         let initialPlant = selectedPlant ? plants.first : nil
@@ -17,6 +18,7 @@ enum ContentPreviewBuilder {
         return ContentView(initialVillage: initialVillage, initialPlant: initialPlant)
             .environmentObject(config)
             .environmentObject(logging)
+            .environmentObject(notificationService)
             .modelContainer(container)
     }
 }
