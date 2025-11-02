@@ -13,6 +13,7 @@ final class LoggingService: ObservableObject {
         case lifecycle
         case data
         case backup
+        case importExport
         case general
     }
 
