@@ -214,14 +214,32 @@ struct LegacyActivity: Codable {
 struct LegacySchedule: Codable {
     let id: UUID?
     let kind: Schedule.Kind?
+    let cadenceKind: Schedule.CadenceKind?
     let frequencyInDays: Int?
+    let weekday: Int?
+    let dayOfMonth: Int?
+    let nextDueAt: Date?
     let lastCompletedAt: Date?
     let unknownFields: [String: String]
 
-    init(id: UUID?, kind: Schedule.Kind?, frequencyInDays: Int?, lastCompletedAt: Date?, unknownFields: [String: String]) {
+    init(
+        id: UUID?,
+        kind: Schedule.Kind?,
+        cadenceKind: Schedule.CadenceKind?,
+        frequencyInDays: Int?,
+        weekday: Int?,
+        dayOfMonth: Int?,
+        nextDueAt: Date?,
+        lastCompletedAt: Date?,
+        unknownFields: [String: String]
+    ) {
         self.id = id
         self.kind = kind
+        self.cadenceKind = cadenceKind
         self.frequencyInDays = frequencyInDays
+        self.weekday = weekday
+        self.dayOfMonth = dayOfMonth
+        self.nextDueAt = nextDueAt
         self.lastCompletedAt = lastCompletedAt
         self.unknownFields = unknownFields
     }
@@ -250,6 +268,23 @@ struct LegacySchedule: Codable {
                 break
             }
         }
+        let cadenceKindKey = DynamicCodingKey(stringValue: "cadenceKind")
+        if let rawCadence = try cadenceKindKey.flatMap({ try container.decodeIfPresent(String.self, forKey: $0) }),
+           let parsed = Schedule.CadenceKind(rawValue: rawCadence) {
+            cadenceKind = parsed
+        } else {
+            cadenceKind = nil
+        }
+
+        let weekdayKey = DynamicCodingKey(stringValue: "weekday")
+        weekday = try weekdayKey.flatMap { try container.decodeIfPresent(Int.self, forKey: $0) }
+
+        let dayOfMonthKey = DynamicCodingKey(stringValue: "dayOfMonth")
+        dayOfMonth = try dayOfMonthKey.flatMap { try container.decodeIfPresent(Int.self, forKey: $0) }
+
+        let nextDueKey = DynamicCodingKey(stringValue: "nextDueAt")
+        nextDueAt = try nextDueKey.flatMap { try container.decodeIfPresent(Date.self, forKey: $0) }
+
         frequencyInDays = parsedFrequency
 
         let lastCompletedKey = DynamicCodingKey(stringValue: "lastCompletedAt")
@@ -258,7 +293,21 @@ struct LegacySchedule: Codable {
             ?? updatedKey.flatMap { try container.decodeIfPresent(Date.self, forKey: $0) }
 
         var unknown: [String: String] = [:]
-        let known = ["id", "kind", "type", "frequency", "frequencyInDays", "interval", "intervalDays", "lastCompletedAt", "lastDoneAt"]
+        let known = [
+            "id",
+            "kind",
+            "type",
+            "frequency",
+            "frequencyInDays",
+            "interval",
+            "intervalDays",
+            "lastCompletedAt",
+            "lastDoneAt",
+            "cadenceKind",
+            "weekday",
+            "dayOfMonth",
+            "nextDueAt"
+        ]
         for key in container.allKeys where !known.contains(key.stringValue) {
             if let value = try? container.decode(JSONValue.self, forKey: key) {
                 unknown[key.stringValue] = value.displayString
@@ -324,13 +373,21 @@ extension LegacyPlantPayload {
 
         let scheduleModels: [Schedule] = schedules.map { schedule in
             let frequency = max(schedule.frequencyInDays ?? 7, 1)
+            let cadenceKind = schedule.cadenceKind ?? .everyNDays
             let scheduleModel = Schedule(
                 id: schedule.id ?? UUID(),
                 kind: schedule.kind ?? .custom,
+                cadenceKind: cadenceKind,
                 frequencyInDays: frequency,
+                weekday: cadenceKind == .dayOfWeek ? schedule.weekday : nil,
+                dayOfMonth: cadenceKind == .dayOfMonth ? schedule.dayOfMonth : nil,
                 lastCompletedAt: schedule.lastCompletedAt,
+                nextDueAt: schedule.nextDueAt,
                 plant: plantModel
             )
+            if schedule.nextDueAt == nil {
+                scheduleModel.recomputeNextDue()
+            }
             return scheduleModel
         }
 

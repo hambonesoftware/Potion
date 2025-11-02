@@ -4,6 +4,7 @@ import SwiftData
 struct ContentView: View {
     @EnvironmentObject private var appConfig: AppConfig
     @EnvironmentObject private var loggingService: LoggingService
+    @EnvironmentObject private var notificationService: NotificationService
 
     @State private var selectedVillage: Village?
     @State private var selectedPlant: Plant?
@@ -24,11 +25,19 @@ struct ContentView: View {
             } detail: {
                 PlantDetailView(plant: selectedPlant)
                     .environmentObject(loggingService)
+                    .environmentObject(notificationService)
             }
             .tabItem {
                 Label("Home", systemImage: "leaf")
             }
             .navigationTitle(appConfig.appDisplayName)
+
+            UpcomingView()
+                .environmentObject(loggingService)
+                .environmentObject(notificationService)
+                .tabItem {
+                    Label("Upcoming", systemImage: "calendar")
+                }
 
             if appConfig.enableDeveloperPanel {
                 DevPanelView()
@@ -39,6 +48,10 @@ struct ContentView: View {
         }
         .task {
             loggingService.log("ContentView appeared", category: .lifecycle)
+            await notificationService.refreshAuthorizationStatus()
+            if notificationService.authorizationState == .notDetermined {
+                await notificationService.requestAuthorization()
+            }
         }
         .onChange(of: selectedVillage) { newVillage in
             guard let currentPlant = selectedPlant else { return }

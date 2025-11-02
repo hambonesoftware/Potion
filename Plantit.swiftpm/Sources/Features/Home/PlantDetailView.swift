@@ -4,11 +4,13 @@ import SwiftData
 struct PlantDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var loggingService: LoggingService
+    @EnvironmentObject private var notificationService: NotificationService
     @Query(sort: \Village.name) private var villages: [Village]
 
     var plant: Plant?
 
     @State private var isPresentingEditor = false
+    @State private var isPresentingScheduleEditor = false
     @State private var isPresentingNote = false
     @State private var formState = PlantFormState()
     @State private var noteText = ""
@@ -29,7 +31,10 @@ struct PlantDetailView: View {
         guard let schedule = plant?.schedules.first(where: { $0.kind == .watering }) else {
             return "No schedule"
         }
-        var components: [String] = ["Every \(schedule.frequencyInDays) day\(schedule.frequencyInDays == 1 ? "" : "s")"]
+        var components: [String] = [schedule.cadenceDescription]
+        if let next = schedule.nextDueAt {
+            components.append("Next due \(next.formatted(date: .abbreviated, time: .shortened))")
+        }
         if let last = schedule.lastCompletedAt {
             components.append("Last done \(last.formatted(date: .abbreviated, time: .shortened))")
         }
@@ -76,6 +81,18 @@ struct PlantDetailView: View {
                                 .disabled(!formState.isValid)
                         }
                     }
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { isPresentingScheduleEditor && plant != nil },
+            set: { isPresentingScheduleEditor = $0 }
+        )) {
+            if let plant {
+                NavigationStack {
+                    ScheduleEditorView(plant: plant)
+                        .environmentObject(loggingService)
+                        .environmentObject(notificationService)
+                }
             }
         }
         .sheet(isPresented: $isPresentingNote) {
@@ -154,12 +171,50 @@ struct PlantDetailView: View {
     }
 
     private func schedule(for plant: Plant) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Schedule")
-                .font(.headline)
-            Text(wateringScheduleDescription)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Schedules")
+                    .font(.headline)
+                Spacer()
+                Button("Manage") {
+                    isPresentingScheduleEditor = true
+                }
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+            }
+
+            if plant.schedules.isEmpty {
+                Text("No schedules configured")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(plant.schedules.sorted(by: { $0.nextDueAt ?? .distantFuture < $1.nextDueAt ?? .distantFuture })) { schedule in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(schedule.kind.displayName)
+                                .font(.subheadline)
+                                .bold()
+                            Text(schedule.cadenceDescription)
+                                .font(.subheadline)
+                            if let next = schedule.nextDueAt {
+                                Text("Next due \(next.formatted(date: .abbreviated, time: .shortened))")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if let last = schedule.lastCompletedAt {
+                                Text("Last done \(last.formatted(date: .abbreviated, time: .shortened))")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color(uiColor: .quaternarySystemFill))
+                        )
+                    }
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
@@ -295,6 +350,7 @@ struct PlantDetailView: View {
         Task {
             do {
                 _ = try await repository.recordActivity(for: plant, kind: kind)
+                await scheduleNotifications(for: kind)
                 loggingService.log("Added \(kind.description.lowercased()) activity for \(plant.name)", category: .data)
             } catch {
                 alertMessage = error.localizedDescription
@@ -309,6 +365,7 @@ struct PlantDetailView: View {
         Task {
             do {
                 _ = try await repository.recordActivity(for: plant, kind: .note, note: trimmed)
+                await scheduleNotifications(for: .note)
                 loggingService.log("Added note to \(plant.name)", category: .data)
                 noteText = ""
                 isPresentingNote = false
@@ -316,6 +373,17 @@ struct PlantDetailView: View {
                 alertMessage = error.localizedDescription
                 loggingService.log("Failed to add note: \(error.localizedDescription)", category: .data)
             }
+        }
+    }
+
+    @MainActor
+    private func scheduleNotifications(for kind: PlantActivity.ActivityKind) async {
+        guard let plant else { return }
+        let relevantSchedules = plant.schedules.filter { schedule in
+            schedule.kind.defaultActivityKind == kind
+        }
+        for schedule in relevantSchedules {
+            await notificationService.scheduleReminder(for: schedule)
         }
     }
 

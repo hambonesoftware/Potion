@@ -15,6 +15,7 @@ final class LoggingService: ObservableObject {
         case backup
         case importExport
         case general
+        case notifications
     }
 
     @Published private(set) var entries: [Entry] = []
