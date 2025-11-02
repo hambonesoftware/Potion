@@ -20,8 +20,10 @@ struct ContentView: View {
                     .environmentObject(loggingService)
             } content: {
                 PlantListView(selection: $selectedPlant, village: selectedVillage)
+                    .environmentObject(loggingService)
             } detail: {
                 PlantDetailView(plant: selectedPlant)
+                    .environmentObject(loggingService)
             }
             .tabItem {
                 Label("Home", systemImage: "leaf")
@@ -37,6 +39,16 @@ struct ContentView: View {
         }
         .task {
             loggingService.log("ContentView appeared", category: .lifecycle)
+        }
+        .onChange(of: selectedVillage) { newVillage in
+            guard let currentPlant = selectedPlant else { return }
+            if let newVillage {
+                if currentPlant.village?.id != newVillage.id {
+                    selectedPlant = nil
+                }
+            } else {
+                selectedPlant = nil
+            }
         }
     }
 }
